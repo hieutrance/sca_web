@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Car, Users, Calendar, Archive, Search, Bell, Key, ClipboardList, MessageSquare } from 'lucide-react'; 
+import { Home, Car, Users, Calendar, Archive, Search, Bell, Key, ClipboardList, MessageSquare, Wrench  } from 'lucide-react'; 
 
 // 1. IMPORT CÁC TRANG (PAGES)
 import Dashboard from './pages/Dashboard';
@@ -9,7 +9,8 @@ import Bookings from './pages/Bookings';
 import BookingHistory from './pages/BookingHistory';
 import Requests from './pages/Requests';
 import Login from './pages/Login';
-import ChatSupport from './pages/ChatSupport'; // <--- IMPORT TRANG MỚI VÀO ĐÂY
+import ChatSupport from './pages/ChatSupport'; 
+import Provisioning from './pages/Provisioning';
 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './services/firebase';
@@ -86,7 +87,8 @@ export default function App() {
       case 'customers': return <Customers />;
       case 'bookings': return <Bookings />;
       case 'history': return <BookingHistory />;
-      case 'chat': return <ChatSupport />; // <--- RENDER TRANG MỚI
+      case 'chat': return <ChatSupport />; 
+      case 'provisioning': return <Provisioning />;
       default: return <Dashboard />;
     }
   };
@@ -103,7 +105,7 @@ export default function App() {
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-10">
         <div className="h-16 flex items-center px-6 border-b border-slate-700 shrink-0">
           <Key className="text-blue-400 mr-3" size={24} />
-          <h1 className="text-lg font-bold text-white tracking-wide">DIGITAL KEY</h1>
+          <h1 className="text-lg font-bold text-white tracking-wide">SCA WEB</h1>
         </div>
         <nav className="flex-1 py-6 px-3 space-y-1.5 overflow-y-auto">
           <button onClick={() => setActiveTab('dashboard')} className={sidebarBtnStyle('dashboard')}>
@@ -142,6 +144,10 @@ export default function App() {
           </button>
           <button onClick={() => setActiveTab('history')} className={sidebarBtnStyle('history')}>
             <Archive className="mr-3" size={20} /> Lịch sử thuê xe
+          </button>
+          <div className="h-px bg-slate-800 my-4 mx-2"></div>
+          <button onClick={() => setActiveTab('provisioning')} className={sidebarBtnStyle('provisioning')}>
+            <Wrench className="mr-3" size={20} /> Cấp Phát Khóa
           </button>
         </nav>
       </aside>
