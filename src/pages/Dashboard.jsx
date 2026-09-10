@@ -125,9 +125,7 @@ export default function Dashboard() {
           <h2 className="text-2xl font-extrabold text-gray-900 mb-1">Tổng quan Hệ thống</h2>
           <p className="text-sm text-gray-500">Giám sát hiệu suất hoạt động và trạng thái đội xe theo thời gian thực.</p>
         </div>
-        <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold border border-blue-100 flex items-center gap-2 shadow-sm">
-          <Activity size={18} className="animate-pulse" /> Hệ thống đang hoạt động tốt
-        </div>
+
       </div>
 
       {}
