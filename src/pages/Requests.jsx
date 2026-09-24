@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarClock, CheckCircle, XCircle, Search, Clock, Car, User } from 'lucide-react';
+import { CalendarClock, CheckCircle, XCircle, Search, Clock, Car, User, X, Calendar } from 'lucide-react';
 import { ref, onValue, update, push, set } from 'firebase/database';
 import { db } from '../services/firebase';
 
@@ -7,6 +7,10 @@ export default function Requests() {
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // State Modal duyệt đơn cho Admin
+  const [selectedReq, setSelectedReq] = useState(null);
+  const [approvalExpireTime, setApprovalExpireTime] = useState('');
 
   useEffect(() => {
     const requestsRef = ref(db, 'BookingRequests');
@@ -17,9 +21,8 @@ export default function Requests() {
           id: key,
           ...data[key]
         }));
-        // Chỉ lấy những yêu cầu đang ở trạng thái PENDING
         const pendingRequests = formatted.filter(req => req.status === 'PENDING');
-        setRequests(pendingRequests.reverse()); // Mới nhất lên đầu
+        setRequests(pendingRequests.reverse());
       } else {
         setRequests([]);
       }
@@ -29,52 +32,71 @@ export default function Requests() {
     return () => unsubscribe();
   }, []);
 
-  // HÀM PHÊ DUYỆT YÊU CẦU
-  const handleApprove = async (req) => {
-    if (!window.confirm(`Xác nhận PHÊ DUYỆT giao xe ${req.car_model} cho khách hàng ${req.customer_name}?`)) return;
+  // Khi bấm nút Duyệt trên bảng: Mở Modal và nạp mốc thời gian khách yêu cầu
+  const openApproveModal = (req) => {
+    setSelectedReq(req);
+    if (req.return_time) {
+      // Chuyển định dạng YYYY-MM-DD HH:mm sang YYYY-MM-DDTHH:mm cho input HTML5
+      setApprovalExpireTime(req.return_time.replace(' ', 'T'));
+    } else {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setApprovalExpireTime(tomorrow.toISOString().substring(0, 16));
+    }
+  };
+
+  // Xác nhận Duyệt sau khi Admin đã xem xét / chỉnh sửa thời gian trả xe
+const handleConfirmApproval = async (e) => {
+    e.preventDefault();
+    if (!selectedReq || !approvalExpireTime) return;
 
     try {
-      // 1. Tạo 1 Booking chính thức (Active)
+      const finalExpireTime = approvalExpireTime.replace('T', ' ');
+      
+      // CHUYỂN ĐỔI THỜI GIAN ĐƯỢC DUYỆT SANG UNIX TIMESTAMP
+      const unixTimestamp = Math.floor(new Date(approvalExpireTime).getTime() / 1000);
+
       const newBookingRef = push(ref(db, 'Bookings'));
-      
-      // Giả lập thời gian hết hạn là 24h sau khi nhận xe
-      const expireDate = new Date();
-      expireDate.setDate(expireDate.getDate() + 1);
-      
       await set(newBookingRef, {
-        customer_id: req.customer_id,
-        car_id: req.car_id,
-        expire_time: expireDate.toISOString().replace('T', ' ').substring(0, 16), // Format YYYY-MM-DD HH:mm
+        customer_id: selectedReq.customer_id,
+        car_id: selectedReq.car_id,
+        expire_time: finalExpireTime, 
         status: 'ACTIVE',
         penalty_fee: 0,
         key_root: "auto_key_" + Math.random().toString(36).substring(7)
       });
 
-      // 2. Chuyển trạng thái xe thành IN_USE
-      await update(ref(db, `Vehicles/${req.car_id}`), { status: 'IN_USE' });
+      await update(ref(db, `Vehicles/${selectedReq.car_id}`), { status: 'IN_USE' });
+      
+      await update(ref(db, `BookingRequests/${selectedReq.id}`), { 
+        status: 'APPROVED',
+        approved_expire_time: finalExpireTime
+      });
 
-      // 3. Đánh dấu Yêu cầu này là đã Duyệt
-      await update(ref(db, `BookingRequests/${req.id}`), { status: 'APPROVED' });
+      // [ĐÃ SỬA LỖI Ở ĐÂY] Cập nhật CỤC BỘ bằng cấu trúc Nested Update
+      // Điều này báo Firebase chỉ thêm trường 'expire_timestamp' vào bên dưới car_id, 
+      // giữ nguyên toàn bộ encrypted_key_root và iv
+      const secureUpdates = {};
+      secureUpdates[`SecureKeys/${selectedReq.car_id}/expire_timestamp`] = unixTimestamp;
+      await update(ref(db), secureUpdates);
 
-      alert("Đã phê duyệt và cấp khóa cho khách hàng thành công!");
-
+      setSelectedReq(null);
+      alert(`Đã duyệt đơn thành công! Hạn sử dụng khóa: ${finalExpireTime}`);
     } catch (error) {
       console.error("Lỗi khi duyệt:", error);
       alert("Có lỗi xảy ra khi xử lý!");
     }
-  };
-
-  // HÀM TỪ CHỐI YÊU CẦU
+};
   const handleReject = async (reqId) => {
     const reason = window.prompt("Nhập lý do từ chối (Khách hàng sẽ thấy):", "Xe đã có người đặt / Xe đang bảo dưỡng");
-    if (reason === null) return; // Bấm Cancel
+    if (reason === null) return;
 
     try {
       await update(ref(db, `BookingRequests/${reqId}`), { 
         status: 'REJECTED',
         reject_reason: reason
       });
-    } catch (error) {
+    } catch {
       alert("Có lỗi xảy ra!");
     }
   };
@@ -89,7 +111,7 @@ export default function Requests() {
       <div className="flex justify-between items-end mb-8">
         <div>
           <h2 className="text-2xl font-extrabold text-gray-900 mb-1 flex items-center gap-2">
-            <CalendarClock className="text-orange-500" size={28} /> Phê duyệt Yêu cầu
+            Phê duyệt Yêu cầu
           </h2>
           <p className="text-sm text-gray-500">Danh sách khách hàng đang chờ xét duyệt để nhận khóa xe.</p>
         </div>
@@ -100,7 +122,7 @@ export default function Requests() {
             placeholder="Tìm tên khách, xe..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none w-64 bg-white shadow-sm" 
+            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none w-64 bg-white shadow-sm" 
           />
         </div>
       </div>
@@ -114,7 +136,8 @@ export default function Requests() {
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
                 <th className="px-6 py-4 font-semibold">Khách hàng</th>
                 <th className="px-6 py-4 font-semibold">Xe yêu cầu</th>
-                <th className="px-6 py-4 font-semibold">Dự kiến nhận xe</th>
+                <th className="px-6 py-4 font-semibold">Thời gian nhận</th>
+                <th className="px-6 py-4 font-semibold">Dự kiến trả xe</th>
                 <th className="px-6 py-4 font-semibold text-center">Trạng thái</th>
                 <th className="px-6 py-4 font-semibold text-right">Hành động</th>
               </tr>
@@ -122,7 +145,7 @@ export default function Requests() {
             <tbody className="divide-y divide-gray-100">
               {filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-gray-400 flex flex-col items-center justify-center gap-3">
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-400 flex flex-col items-center justify-center gap-3">
                     <Clock size={40} className="text-gray-300" />
                     <p>Hiện không có yêu cầu thuê xe nào đang chờ duyệt.</p>
                   </td>
@@ -146,8 +169,13 @@ export default function Requests() {
                       </div>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">{req.car_id}</p>
                     </td>
-                    <td className="px-6 py-4 font-medium text-orange-600 bg-orange-50/50 rounded-lg inline-block mt-2 ml-6">
+                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">
                       {req.pickup_time}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
+                        {req.return_time || 'Chưa định dạng'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold border border-yellow-200 animate-pulse">CHỜ DUYỆT</span>
@@ -155,7 +183,7 @@ export default function Requests() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => handleApprove(req)}
+                          onClick={() => openApproveModal(req)}
                           className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm shadow-green-600/20"
                         >
                           <CheckCircle size={16} /> Duyệt
@@ -176,6 +204,61 @@ export default function Requests() {
           </table>
         )}
       </div>
+
+      {/* MODAL PHÊ DUYỆT & CHỈNH SỬA THỜI HẠN DÀNH CHO ADMIN */}
+      {selectedReq && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-slate-900 text-white">
+              <div className="flex items-center gap-2">
+                <Calendar className="text-blue-400" size={20} />
+                <h3 className="font-bold text-base">Xác nhận Phê duyệt & Cấp khóa</h3>
+              </div>
+              <button onClick={() => setSelectedReq(null)} className="text-gray-400 hover:text-white p-1">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmApproval} className="p-6 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 text-sm">
+                <p><span className="text-gray-500">Khách hàng:</span> <strong className="text-gray-800">{selectedReq.customer_name}</strong> ({selectedReq.customer_phone})</p>
+                <p><span className="text-gray-500">Phương tiện:</span> <strong className="text-blue-600">{selectedReq.car_model}</strong> ({selectedReq.car_id})</p>
+                <p><span className="text-gray-500">Thời gian nhận:</span> {selectedReq.pickup_time}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">
+                  Thời gian hết hạn khóa (Admin có thể chỉnh sửa):
+                </label>
+                <input 
+                  type="datetime-local" 
+                  required
+                  value={approvalExpireTime} 
+                  onChange={(e) => setApprovalExpireTime(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+                <p className="text-xs text-gray-400 mt-1">Hệ thống sẽ khóa chốt và tính phí phạt nếu khách dùng quá giờ này.</p>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedReq(null)} 
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/30"
+                >
+                  Cấp Khóa Ngay
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

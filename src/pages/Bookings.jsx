@@ -1,30 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Car, Plus, X, Key, AlertTriangle, ArrowLeft, UserCheck, CheckCircle2, Trash2, CheckSquare } from 'lucide-react';
+import { Car, Plus, X, Key, AlertTriangle, ArrowLeft, UserCheck, CheckCircle2, Trash2, CheckSquare, ShieldAlert } from 'lucide-react';
 import { ref, onValue, push, set, update, remove } from 'firebase/database';
 import { db } from '../services/firebase';
 
 export default function Bookings() {
-  // --- QUẢN LÝ TRẠNG THÁI GIAO DIỆN ---
   const [viewMode, setViewMode] = useState('list'); 
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- QUẢN LÝ DỮ LIỆU TỪ FIREBASE ---
   const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
 
-  // --- QUẢN LÝ FORM ---
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [expireTime, setExpireTime] = useState('');
 
-  // LẮNG NGHE ĐỒNG THỜI 3 BẢNG DỮ LIỆU TỪ FIREBASE
   useEffect(() => {
     const bookingsRef = ref(db, 'Bookings');
     const customersRef = ref(db, 'Customers');
     const vehiclesRef = ref(db, 'Vehicles');
     
-    // 1. Lắng nghe Bookings
     const unsubBookings = onValue(bookingsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -36,7 +31,6 @@ export default function Bookings() {
       setIsLoading(false);
     });
 
-    // 2. Lắng nghe Customers (Để lấy tên khách hàng)
     const unsubCustomers = onValue(customersRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -45,12 +39,10 @@ export default function Bookings() {
       }
     });
 
-    // 3. Lắng nghe Vehicles (Chỉ lấy xe Rảnh)
     const unsubVehicles = onValue(vehiclesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const formatted = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-        // CHỈ LẤY NHỮNG XE ĐANG "AVAILABLE" ĐỂ HIỂN THỊ VÀO DANH SÁCH CHỌN
         const availableVehicles = formatted.filter(v => v.status === 'AVAILABLE');
         setVehicles(availableVehicles);
       } else {
@@ -65,7 +57,9 @@ export default function Bookings() {
     };
   }, []);
 
-  // HÀM GHI DỮ LIỆU
+  // =================================================================
+  // HÀM TẠO PHIÊN THUÊ: BỔ SUNG GHI UNIX TIMESTAMP VÀO SECURE KEYS
+  // =================================================================
   const handleCreateBooking = async (e) => {
     e.preventDefault();
     if (!selectedCustomer || !selectedVehicle) {
@@ -73,56 +67,87 @@ export default function Bookings() {
       return;
     }
 
+    // 1. Format thời gian chuỗi cho Bookings (Giao diện người dùng)
+    const formattedExpireTime = expireTime.replace('T', ' ');
+    
+    // 2. Format thời gian Unix Timestamp (giây) cho ECU Access (Phần cứng)
+    const unixTimestamp = Math.floor(new Date(expireTime).getTime() / 1000);
+
     const newBookingData = {
       car_id: selectedVehicle.id,
       customer_id: selectedCustomer.id,
-      expire_time: expireTime.replace('T', ' '), 
+      expire_time: formattedExpireTime, 
       key_root: "random_key_" + Math.random().toString(36).substring(7),
       penalty_fee: 0,
       status: "ACTIVE"
     };
 
     try {
-      // 1. Tạo Booking mới
       const newBookingRef = push(ref(db, 'Bookings'));
       await set(newBookingRef, newBookingData);
       
-      // 2. Cập nhật lại trạng thái xe thành "ĐANG THUÊ"
       const vehicleRef = ref(db, `Vehicles/${selectedVehicle.id}`);
-      await update(vehicleRef, { status: 'IN_USE' });
+      await update(vehicleRef, { status: 'IN_USE', command: null });
       
-      // Reset form & quay lại màn hình danh sách
+      // 3. Đẩy trường expire_timestamp (dạng số) vào node SecureKeys
+      await update(ref(db, `SecureKeys/${selectedVehicle.id}`), {
+        expire_timestamp: unixTimestamp
+      });
+      
       setSelectedCustomer(null);
       setSelectedVehicle(null);
       setExpireTime('');
       setViewMode('list');
-      
     } catch (error) {
       console.error("Lỗi:", error);
       alert("Có lỗi xảy ra khi tạo mã!");
     }
   };
 
-  // HÀM 1: KẾT THÚC PHIÊN THUÊ (Lưu lịch sử Booking, thu hồi Khóa và Xe)
   const handleEndBooking = async (bookingId, carId) => {
     if (!window.confirm('Xác nhận KẾT THÚC phiên thuê này? Xe sẽ được thu hồi về trạng thái SẴN SÀNG.')) return;
     try {
       await update(ref(db, `Bookings/${bookingId}`), { status: 'COMPLETED' });
-      await update(ref(db, `Vehicles/${carId}`), { status: 'AVAILABLE' });
-      await remove(ref(db, `SecureKeys/${carId}`)); // Xóa Key bảo mật khỏi hệ thống
+      await update(ref(db, `Vehicles/${carId}`), { status: 'AVAILABLE', command: null });
+      await remove(ref(db, `SecureKeys/${carId}`)); 
     } catch (error) {
       console.error("Lỗi khi kết thúc:", error);
       alert("Có lỗi xảy ra!");
     }
   };
 
-  // HÀM 2: XÓA PHIÊN THUÊ (Xóa vĩnh viễn khỏi Database, thu hồi Khóa và Xe)
+  const handleRevokeKey = async (bookingId, carId) => {
+    const confirmText = window.prompt(
+      'CẢNH BÁO: Đây là thao tác THU HỒI KHÓA KHẨN CẤP.\nPhần cứng trên xe sẽ lập tức bị xóa bộ nhớ đệm và khóa chốt cửa.\n\nĐể xác nhận, vui lòng gõ chữ "THU HOI" vào ô bên dưới:'
+    );
+    
+    if (confirmText !== 'THU HOI') {
+      if (confirmText !== null) alert("Xác nhận không hợp lệ. Đã hủy thao tác thu hồi.");
+      return;
+    }
+
+    try {
+      await update(ref(db, `Bookings/${bookingId}`), { status: 'REVOKED' });
+      await update(ref(db, `Vehicles/${carId}`), { 
+        command: 'FORCE_REVOKE',
+        status: 'AVAILABLE',
+        door_status: 'Locked'
+      });
+      await remove(ref(db, `SecureKeys/${carId}`)); 
+      
+      alert(`Đã phát lệnh THU HỒI KHÓA khẩn cấp cho xe ${carId}!`);
+    } catch (error) {
+      console.error("Lỗi khi thu hồi khóa:", error);
+      alert("Có lỗi xảy ra khi phát lệnh thu hồi!");
+    }
+  };
+
   const handleDeleteBooking = async (bookingId, carId) => {
     if (!window.confirm('Bạn có chắc chắn muốn XÓA VĨNH VIỄN phiên thuê này khỏi lịch sử?')) return;
     try {
       await remove(ref(db, `Bookings/${bookingId}`));
-      await update(ref(db, `Vehicles/${carId}`), { status: 'AVAILABLE' });
-      await remove(ref(db, `SecureKeys/${carId}`)); // Xóa Key bảo mật
+      await update(ref(db, `Vehicles/${carId}`), { status: 'AVAILABLE', command: null });
+      await remove(ref(db, `SecureKeys/${carId}`)); 
     } catch (error) {
       console.error("Lỗi khi xóa:", error);
       alert("Có lỗi xảy ra!");
@@ -132,15 +157,13 @@ export default function Bookings() {
   const getStatusBadge = (status) => {
     switch(status) {
       case 'ACTIVE': return <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">ĐANG THUÊ</span>;
-      case 'OVERDUE': return <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200 flex items-center gap-1"><AlertTriangle size={12}/> QUÁ HẠN</span>;
+      case 'OVERDUE': return <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold border border-red-200 flex items-center gap-1 w-max"><AlertTriangle size={12}/> QUÁ HẠN</span>;
+      case 'REVOKED': return <span className="px-3 py-1 bg-slate-800 text-red-400 rounded-full text-xs font-bold border border-red-900 flex items-center gap-1 w-max"><ShieldAlert size={12}/> ĐÃ THU HỒI</span>;
       case 'COMPLETED': return <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold border border-gray-200">ĐÃ TRẢ XE</span>;
       default: return <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">{status}</span>;
     }
   };
 
-  // ==========================================
-  // GIAO DIỆN 1: MÀN HÌNH TẠO PHIÊN THUÊ (FULL-SCREEN SPLIT PANE)
-  // ==========================================
   if (viewMode === 'create') {
     return (
       <div className="flex-1 flex flex-col h-full bg-white overflow-hidden animate-in fade-in slide-in-from-right-8 duration-300">
@@ -156,7 +179,6 @@ export default function Bookings() {
 
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
           <div className="flex-[2] flex flex-col p-6 lg:p-8 gap-6 overflow-y-auto">
-            {/* Khách hàng */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col min-h-[300px]">
               <div className="bg-gray-50/80 px-6 py-4 border-b border-gray-200 font-semibold text-gray-700 flex justify-between items-center shrink-0">
                 <span>1. Chọn Khách Hàng</span>
@@ -181,7 +203,6 @@ export default function Bookings() {
               </div>
             </div>
 
-            {/* Xe cộ */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col min-h-[300px]">
               <div className="bg-gray-50/80 px-6 py-4 border-b border-gray-200 font-semibold text-gray-700 flex justify-between items-center shrink-0">
                 <span>2. Chọn Phương Tiện</span>
@@ -243,7 +264,7 @@ export default function Bookings() {
                 <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-5 mt-4">
                   <p className="text-sm text-blue-800 flex gap-3 leading-relaxed">
                     <AlertTriangle size={20} className="text-blue-600 shrink-0 mt-0.5" />
-                    <span>Hệ thống sẽ tự động ghép nối và sinh khóa mã hóa <strong>Key_root</strong> đẩy lên Firebase sau khi xác nhận.</span>
+                    <span>Hệ thống sẽ tự động ghép nối khóa bảo mật và gửi xuống ECU xe <strong>(Kèm giới hạn thời gian Unix).</strong></span>
                   </p>
                 </div>
               </form>
@@ -260,9 +281,6 @@ export default function Bookings() {
     );
   }
 
-  // ==========================================
-  // GIAO DIỆN 2: MÀN HÌNH DANH SÁCH (MẶC ĐỊNH)
-  // ==========================================
   return (
     <div className="flex-1 overflow-auto p-8 animate-in fade-in duration-300">
       <div className="flex justify-between items-end mb-8">
@@ -293,11 +311,14 @@ export default function Bookings() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {bookings.length === 0 ? (
-                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Chưa có phiên thuê xe nào.</td></tr>
+                <tr><td colSpan="7" className="px-6 py-8 text-center text-gray-500">Chưa có phiên thuê xe nào.</td></tr>
               ) : (
                 bookings.map((booking) => {
                   const customerInfo = customers.find(c => c.id === booking.customer_id);
                   const customerName = customerInfo ? customerInfo.full_name : 'Chưa cập nhật tên';
+                  
+                  const isRevokable = booking.status === 'ACTIVE' || booking.status === 'OVERDUE';
+                  const isEndable = booking.status !== 'COMPLETED' && booking.status !== 'REVOKED';
 
                   return (
                     <tr key={booking.id} className="hover:bg-blue-50/50 transition-colors">
@@ -312,22 +333,17 @@ export default function Bookings() {
                       <td className="px-6 py-4 text-right">{booking.penalty_fee > 0 ? <span className="font-bold text-red-600">{booking.penalty_fee.toLocaleString('vi-VN')} đ</span> : <span className="text-gray-400">-</span>}</td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          {/* Nút Kết Thúc: Chỉ hiện khi phiên chưa COMPLETED */}
-                          {booking.status !== 'COMPLETED' && (
-                            <button 
-                              onClick={() => handleEndBooking(booking.id, booking.car_id)}
-                              title="Kết thúc phiên thuê (Đã trả xe)" 
-                              className="p-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                            >
+                          {isEndable && (
+                            <button onClick={() => handleEndBooking(booking.id, booking.car_id)} title="Kết thúc phiên (Khách trả xe)" className="p-1.5 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors border border-transparent hover:border-green-200">
                               <CheckSquare size={18} />
                             </button>
                           )}
-                          {/* Nút Xóa: Luôn hiện để có thể xóa sạch lịch sử */}
-                          <button 
-                            onClick={() => handleDeleteBooking(booking.id, booking.car_id)}
-                            title="Xóa vĩnh viễn" 
-                            className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                          >
+                          {isRevokable && (
+                            <button onClick={() => handleRevokeKey(booking.id, booking.car_id)} title="THU HỒI KHÓA KHẨN CẤP" className="p-1.5 bg-red-50 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-colors border border-red-100 hover:border-red-600 shadow-sm">
+                              <ShieldAlert size={18} />
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteBooking(booking.id, booking.car_id)} title="Xóa vĩnh viễn khỏi hệ thống" className="p-1.5 bg-gray-50 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
                             <Trash2 size={18} />
                           </button>
                         </div>
