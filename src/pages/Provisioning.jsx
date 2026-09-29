@@ -215,7 +215,9 @@ export default function Provisioning() {
           provisioned_status: 'Ready',
           status: 'AVAILABLE',
           door_status: 'Locked',
-          engine_status: 'OFF'
+          engine_status: 'OFF',
+          ble_connected: false,    
+          uwb_distance: ""
         });
 
         setStatusMessage({ type: 'success', text: `Cấp phát thành công xe ${car_id} và Key Fob!` });
