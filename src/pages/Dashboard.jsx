@@ -35,16 +35,13 @@ export default function Dashboard() {
       updateStats();
     });
 
-    // 2. Lắng nghe Bookings
     const unsubB = onValue(bookingsRef, (snapshot) => {
       const data = snapshot.val() || {};
       bData = Object.keys(data).map(key => ({ id: key, ...data[key] }));
       
-      // Lấy 5 cuốc xe mới nhất (Active hoặc Overdue)
       const activeOnly = bData.filter(b => b.status !== 'COMPLETED');
       setRecentBookings(activeOnly.reverse().slice(0, 5));
       
-      // TÍNH TOÁN DỮ LIỆU BIỂU ĐỒ 7 NGÀY QUA TỪ DATABASE
       const today = new Date();
       const last7Days = [];
       for (let i = 6; i >= 0; i--) {
@@ -64,8 +61,7 @@ export default function Dashboard() {
            const match = last7Days.find(day => day.dateRaw === bDate.toDateString());
            if (match) {
               match.bookings += 1;
-              // Tính doanh thu: Giả định 1 cuốc 500k + phí phạt
-              match.revenue += 500000 + (Number(booking.penalty_fee) || 0);
+              match.revenue += 80000 + (Number(booking.penalty_fee) || 0);
            }
         }
       });
@@ -74,7 +70,6 @@ export default function Dashboard() {
       updateStats();
     });
 
-    // 3. Lắng nghe Customers
     const unsubC = onValue(customersRef, (snapshot) => {
       const data = snapshot.val() || {};
       cData = Object.keys(data);

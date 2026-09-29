@@ -32,7 +32,6 @@ export default function Requests() {
     return () => unsubscribe();
   }, []);
 
-  // Khi bấm nút Duyệt trên bảng: Mở Modal và nạp mốc thời gian khách yêu cầu
   const openApproveModal = (req) => {
     setSelectedReq(req);
     if (req.return_time) {
@@ -45,7 +44,7 @@ export default function Requests() {
     }
   };
 
-  // Xác nhận Duyệt sau khi Admin đã xem xét / chỉnh sửa thời gian trả xe
+  // Xác nhận Duyệt 
 const handleConfirmApproval = async (e) => {
     e.preventDefault();
     if (!selectedReq || !approvalExpireTime) return;
@@ -73,9 +72,6 @@ const handleConfirmApproval = async (e) => {
         approved_expire_time: finalExpireTime
       });
 
-      // [ĐÃ SỬA LỖI Ở ĐÂY] Cập nhật CỤC BỘ bằng cấu trúc Nested Update
-      // Điều này báo Firebase chỉ thêm trường 'expire_timestamp' vào bên dưới car_id, 
-      // giữ nguyên toàn bộ encrypted_key_root và iv
       const secureUpdates = {};
       secureUpdates[`SecureKeys/${selectedReq.car_id}/expire_timestamp`] = unixTimestamp;
       await update(ref(db), secureUpdates);

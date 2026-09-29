@@ -57,9 +57,7 @@ export default function Bookings() {
     };
   }, []);
 
-  // =================================================================
-  // HÀM TẠO PHIÊN THUÊ: BỔ SUNG GHI UNIX TIMESTAMP VÀO SECURE KEYS
-  // =================================================================
+  // HÀM TẠO PHIÊN THUÊ
   const handleCreateBooking = async (e) => {
     e.preventDefault();
     if (!selectedCustomer || !selectedVehicle) {
@@ -67,11 +65,9 @@ export default function Bookings() {
       return;
     }
 
-    // 1. Format thời gian chuỗi cho Bookings (Giao diện người dùng)
     const formattedExpireTime = expireTime.replace('T', ' ');
     
-    // 2. Format thời gian Unix Timestamp (giây) cho ECU Access (Phần cứng)
-    const unixTimestamp = Math.floor(new Date(expireTime).getTime() / 1000);
+    const unixTimestamp = Math.floor(new Date(expireTime).getTime() / 1000); // format time
 
     const newBookingData = {
       car_id: selectedVehicle.id,
@@ -89,7 +85,6 @@ export default function Bookings() {
       const vehicleRef = ref(db, `Vehicles/${selectedVehicle.id}`);
       await update(vehicleRef, { status: 'IN_USE', command: null });
       
-      // 3. Đẩy trường expire_timestamp (dạng số) vào node SecureKeys
       await update(ref(db, `SecureKeys/${selectedVehicle.id}`), {
         expire_timestamp: unixTimestamp
       });

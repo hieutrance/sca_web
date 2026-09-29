@@ -44,15 +44,12 @@ export default function BookingHistory() {
 
   }, []);
 
-  // Cho phép xóa lịch sử cũ cho nhẹ Database
   const handleDeleteHistory = async (bookingId) => {
     if (!window.confirm('Bạn có chắc chắn muốn XÓA VĨNH VIỄN lịch sử chuyến đi này?')) return;
     try {
-      // --- MÃ DÀNH CHO MÔI TRƯỜNG XEM TRƯỚC TRÊN CANVAS ---
       setHistory(prev => prev.filter(h => h.id !== bookingId));
 
-      // --- MÃ DÀNH CHO VS CODE CỦA BẠN (Bỏ comment đoạn dưới đây để dùng thật) ---
-      // await remove(ref(db, `Bookings/${bookingId}`));
+
     } catch (error) {
       console.error("Lỗi khi xóa:", error);
       alert("Có lỗi xảy ra!");

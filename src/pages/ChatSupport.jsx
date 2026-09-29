@@ -11,7 +11,7 @@ export default function ChatSupport() {
   const [searchTerm, setSearchTerm] = useState('');
   const messagesEndRef = useRef(null);
 
-  // 1. Lấy danh sách tất cả các phòng Chat
+  // Lấy danh sách tất cả các phòng Chat
   useEffect(() => {
     const chatsRef = ref(db, 'Chats');
     const unsub = onValue(chatsRef, (snapshot) => {
@@ -31,7 +31,7 @@ export default function ChatSupport() {
     return () => unsub();
   }, []);
 
-  // 2. Lấy nội dung tin nhắn khi chọn 1 phòng Chat
+  //  Lấy nội dung tin nhắn khi chọn 1 phòng Chat
   useEffect(() => {
     if (!activeChat) return;
 
@@ -55,7 +55,7 @@ export default function ChatSupport() {
     return () => unsub();
   }, [activeChat]);
 
-  // 3. Hàm Gửi tin nhắn từ Admin
+  // Hàm Gửi tin nhắn từ Admin
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputText.trim() || !activeChat) return;

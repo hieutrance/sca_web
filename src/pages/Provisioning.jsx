@@ -7,11 +7,9 @@ import { db } from '../services/firebase';
 const MASTER_KEY_STR = "MySuperSecretMasterKey32Bytes!!!";
 
 export default function Provisioning() {
-  // --- STATE QUẢN LÝ DỮ LIỆU ---
   const [vehicles, setVehicles] = useState({});
   const [nfcWhitelist, setNfcWhitelist] = useState({});
   
-  // --- STATE BIỂU MẪU CẤP PHÁT XE & KEY FOB ---
   const [formData, setFormData] = useState({
     car_id: '',
     license_plate: '',
@@ -20,7 +18,6 @@ export default function Provisioning() {
     color: 'Trắng',
   });
 
-  // --- STATE BIỂU MẪU CẤP THẺ NFC ---
   const [nfcCarId, setNfcCarId] = useState('');
 
   // --- STATE TIẾN TRÌNH & THÔNG BÁO ---
@@ -36,7 +33,6 @@ export default function Provisioning() {
     { name: 'Xanh', hex: '#3b82f6' },
   ];
 
-  // 1. LẮNG NGHE DỮ LIỆU THỜI GIAN THỰC TỪ FIREBASE
   useEffect(() => {
     const vehiclesRef = ref(db, 'Vehicles');
     const nfcRef = ref(db, 'NfcWhitelist');
@@ -55,7 +51,6 @@ export default function Provisioning() {
     };
   }, []);
 
-  // 2. CÁC HÀM XỬ LÝ NỐI TIẾP WEB SERIAL API
   const readResponseWithTimeout = async (reader, timeoutMs) => {
     let buffer = "";
     const deadline = Date.now() + timeoutMs;
@@ -120,7 +115,7 @@ export default function Provisioning() {
     return null;
   };
 
-  // 3. MÃ HÓA AES-256-CTR BẰNG WEB CRYPTO API TRÊN FRONTEND
+  // MÃ HÓA AES-256-CTR WEB CRYPTO API 
   const encryptKeyRootAES = async (plainKeyHex) => {
     const iv = window.crypto.getRandomValues(new Uint8Array(16));
     const masterKeyBytes = new TextEncoder().encode(MASTER_KEY_STR);
@@ -150,7 +145,7 @@ export default function Provisioning() {
     return { ivHex, ciphertextHex };
   };
 
-  // 4. QUY TRÌNH 1: CẤP PHÁT KEY FOB QUA USB VÀ LƯU FIREBASE
+  //  CẤP PHÁT KEY FOB QUA USB VÀ LƯU FIREBASE
   const handleUSBProvisioning = async () => {
     if (!("serial" in navigator)) {
       alert("Trình duyệt không hỗ trợ Web Serial. Vui lòng dùng Chrome hoặc Edge.");
@@ -238,7 +233,7 @@ export default function Provisioning() {
     }
   };
 
-  // 5. QUY TRÌNH 2: NẠP MÃ XE VÀ THẺ NFC CHO ECU ACCESS
+  //  NẠP MÃ XE VÀ THẺ NFC CHO ECU ACCESS
   const handleProvisionCarAndNfc = async () => {
     if (!("serial" in navigator)) {
       alert("Trình duyệt không hỗ trợ Web Serial. Vui lòng dùng Chrome hoặc Edge.");
@@ -267,21 +262,21 @@ export default function Provisioning() {
 
       await new Promise(r => setTimeout(r, 2000));
 
-      // BƯỚC 1: SET_CAR_ID
+      //  SET_CAR_ID
       await writer.write(`SET_CAR_ID:${targetCarId}\n`);
       let response = await readResponseWithTimeout(reader, 8000);
       if (!response.includes("SUCCESS")) {
         throw new Error("Không thể cấu hình CAR_ID trên ECU Access: " + response);
       }
 
-      // BƯỚC 2: CHỜ QUẸT THẺ
+      //  CHỜ QUẸT THẺ
       alert(`Đã nạp Car ID thành công!\nBấm OK rồi quẹt thẻ NFC vào đầu đọc trong vòng 10 giây.`);
       const detectedUid = await waitForUidDetected(reader, 10000);
       if (!detectedUid) {
         throw new Error("Không phát hiện thẻ NFC nào được quét trong thời gian quy định.");
       }
 
-      // BƯỚC 3: NFC_ADD
+      //  NFC_ADD
       await writer.write(`NFC_ADD:${detectedUid}\n`);
       response = await readResponseWithTimeout(reader, 5000);
       if (!response.includes("SUCCESS")) {
@@ -290,7 +285,7 @@ export default function Provisioning() {
 
       await writer.close();
 
-      // BƯỚC 4: ĐỒNG BỘ LÊN FIREBASE REALTIME DATABASE
+      //  ĐỒNG BỘ LÊN FIREBASE 
       await set(ref(db, `NfcWhitelist/${targetCarId}/${detectedUid}`), {
         added_at: Math.floor(Date.now() / 1000)
       });
@@ -307,7 +302,7 @@ export default function Provisioning() {
     }
   };
 
-  // 6. QUY TRÌNH 3: XÓA THẺ NFC KHỎI ECU ACCESS VÀ DATABASE
+  //  XÓA THẺ NFC KHỎI ECU ACCESS VÀ DATABASE
   const handleNFCDelete = async (carId, uid) => {
     if (!("serial" in navigator)) {
       alert("Trình duyệt không hỗ trợ Web Serial. Vui lòng dùng Chrome hoặc Edge.");

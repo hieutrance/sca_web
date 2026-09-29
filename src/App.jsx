@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Car, Users, Calendar, Archive, Search, Bell, Key, ClipboardList, MessageSquare, Wrench  } from 'lucide-react'; 
-
-// 1. IMPORT CÁC TRANG (PAGES)
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
 import Customers from './pages/Customers';
@@ -140,7 +138,7 @@ export default function App() {
             <Users className="mr-3" size={20} /> Khách hàng
           </button>
           <button onClick={() => setActiveTab('bookings')} className={sidebarBtnStyle('bookings')}>
-            <Calendar className="mr-3" size={20} /> Đang hoạt động
+            <Calendar className="mr-3" size={20} /> Phiên thuê xe
           </button>
           <button onClick={() => setActiveTab('history')} className={sidebarBtnStyle('history')}>
             <Archive className="mr-3" size={20} /> Lịch sử thuê xe
