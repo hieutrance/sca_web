@@ -148,13 +148,13 @@ export default function App() {
             <Wrench className="mr-3" size={20} /> Cấp Phát Khóa
           </button>
         </nav>
-      </aside>
+      </aside>  
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input type="text" placeholder="Tìm kiếm..." className="pl-10 pr-4 py-2 bg-gray-100 border-transparent rounded-full text-sm focus:bg-white focus:border-blue-500 outline-none w-64" />
+            {/* <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /> */}
+            {/* <input type="text" placeholder="Tìm kiếm..." className="pl-10 pr-4 py-2 bg-gray-100 border-transparent rounded-full text-sm focus:bg-white focus:border-blue-500 outline-none w-64" /> */}
           </div>
           <div className="flex items-center gap-4">
             

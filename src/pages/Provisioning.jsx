@@ -3,7 +3,7 @@ import { Wrench, Usb, Car, Key, CreditCard, Scan, X, AlertCircle, CheckCircle2 }
 import { ref, onValue, set, update, remove } from 'firebase/database';
 import { db } from '../services/firebase';
 
-// Khóa Master 32 bytes đồng nhất với hệ thống để mã hóa key_root
+
 const MASTER_KEY_STR = "MySuperSecretMasterKey32Bytes!!!";
 
 export default function Provisioning() {
@@ -217,7 +217,8 @@ export default function Provisioning() {
           door_status: 'Locked',
           engine_status: 'OFF',
           ble_connected: false,    
-          uwb_distance: ""
+          uwb_distance: "",
+          network_status: "OFFLINE"
         });
 
         setStatusMessage({ type: 'success', text: `Cấp phát thành công xe ${car_id} và Key Fob!` });
